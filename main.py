@@ -2,24 +2,34 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.responses import PlainTextResponse
 import requests
+import httpx
+import asyncio
+from dotenv import main
+import os
 import datetime
 import psycopg2
-from consts import city, password
 
 app = FastAPI()
+city = 'Тамбов'
 
 url = 'https://api.openweathermap.org/data/2.5/weather?q=' + city + '&units=metric&lang=ru&appid=79d1ca96933b0328e1c7e3e7a26cb347'
+main.load_dotenv()
+
+PASSWORD = os.getenv('POSTGRES_PASSWORD')
+async def get_tempature():
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.json()
 
 
 def insertindb(temp):
     connection = psycopg2.connect(user="postgres",
-                                  password=password,
-                                  host="192.168.66.179",
+                                  password=PASSWORD,
+                                  host="postgres",
                                   port="5432")
     cursor = connection.cursor()
     dt = datetime.datetime.now()
 
-    # Проверка существования таблицы
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS temperature (
             DATETIME timestamp PRIMARY KEY, 
@@ -39,12 +49,11 @@ def insertindb(temp):
 
 def getdb():
     connection = psycopg2.connect(user="postgres",
-                                  password=password,
-                                  host="192.168.66.179",
+                                  password=PASSWORD,
+                                  host="postgres",
                                   port="5432")
     cursor = connection.cursor()
 
-    # Проверка существования таблицы
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS temperature (
             DATETIME timestamp PRIMARY KEY, 
@@ -69,8 +78,8 @@ def root():
 
 
 @app.get("/weathernow")
-def weather():
-    weather_data = requests.get(url).json()
+async def weather():
+    weather_data = await get_tempature()
     temperature = round(weather_data['main']['temp'])
     insertindb(temperature)
     html_content = "<h2>Температура в " + city + ": " + str(temperature) + "</h2>"
